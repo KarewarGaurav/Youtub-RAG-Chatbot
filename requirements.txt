@@ -1,0 +1,11 @@
+fastapi>=0.100.0
+uvicorn>=0.20.0
+youtube-transcript-api>=0.6.0
+langchain-groq
+langchain-text-splitters
+langchain-community
+langchain-huggingface
+faiss-cpu
+python-dotenv
+pydantic
+deep-translator
