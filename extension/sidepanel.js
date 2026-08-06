@@ -205,8 +205,8 @@ async function handleSendMessage() {
     }
   } catch (err) {
     removeTypingIndicator(typingIndicator);
-    const errorMsg = "Could not connect to FastAPI server. Please run `uvicorn app:app --reload` on port 8000.";
-    appendMessage("assistant", `⚠️ Connection Error: Cannot reach backend server on http://localhost:8000.`);
+    const errorMsg = `Could not connect to backend server at ${BACKEND_URL}.`;
+    appendMessage("assistant", `⚠️ Connection Error: Cannot reach backend server at ${BACKEND_URL}.`);
     showError(errorMsg);
     checkBackendHealth();
   } finally {
