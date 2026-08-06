@@ -401,7 +401,7 @@ try:
         title="🤖 YouTube Video RAG AI Assistant API",
         description="FastAPI Backend for Chrome Extension. Endpoints: /chat, /process, /health, /docs"
     )
-    app = gr.mount_gradio_app(app, demo, path="/")
+    app = gr.mount_gradio_app(app, demo, path="/gradio")
 except Exception as e:
     print(f"Gradio mounting skipped: {e}")
 
