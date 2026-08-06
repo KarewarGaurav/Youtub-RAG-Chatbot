@@ -171,54 +171,71 @@ def translate_to_english_fallback(transcript_items, lang_code: str) -> str:
         return raw_text
 
 
-def get_or_create_vector_store(video_id: str) -> FAISS:
-    """Fetch transcript for a video_id (guaranteeing English translation), chunk, embed, and store in FAISS index (with caching)."""
+def get_or_create_vector_store(video_id: str, custom_transcript_text: Optional[str] = None) -> FAISS:
+    """Fetch transcript for a video_id (guaranteeing English translation), chunk, embed, and store in FAISS index (with caching).
+    Supports PROXY_URL environment variable and client-extracted transcript text fallback.
+    """
     clean_id = extract_video_id(video_id)
     
     if clean_id in vector_store_cache:
         print(f"Using cached vector store for video ID: {clean_id}")
         return vector_store_cache[clean_id]["vector_store"]
     
-    print(f"Fetching transcript for video ID: {clean_id}...")
-    try:
-        y_api = YouTubeTranscriptApi()
-        transcript_list_obj = y_api.list(clean_id)
+    transcript_text = ""
+    
+    # 1. Use client-provided transcript text if supplied (bypasses Cloud Data Center IP blocks!)
+    if custom_transcript_text and len(custom_transcript_text.strip()) > 50:
+        print(f"Using client-provided transcript for video ID: {clean_id} ({len(custom_transcript_text)} chars)...")
+        transcript_text = custom_transcript_text
+    else:
+        print(f"Fetching transcript for video ID: {clean_id}...")
+        proxy_url = os.getenv("PROXY_URL")
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
         
-        lang_code = "en"
-        # 1. Try finding manual/generated English transcript
         try:
-            english_transcript = transcript_list_obj.find_transcript(['en', 'en-US', 'en-GB'])
-            fetched = english_transcript.fetch()
-            transcript_text = " ".join(chunk.text for chunk in fetched)
-            print(f"Loaded native English transcript for video '{clean_id}'.")
-        except Exception:
-            # 2. If native English is not available, pick first transcript
-            first_transcript = next(iter(transcript_list_obj))
-            lang_code = first_transcript.language_code
+            if proxies:
+                print(f"Using configured proxy for YouTube transcript request: {proxy_url[:30]}...")
+                y_api = YouTubeTranscriptApi(proxies=proxies)
+            else:
+                y_api = YouTubeTranscriptApi()
+                
+            transcript_list_obj = y_api.list(clean_id)
             
-            if first_transcript.is_translatable:
-                print(f"Auto-translating transcript ({lang_code}) to English via YouTube API...")
-                try:
-                    translated = first_transcript.translate('en')
-                    fetched = translated.fetch()
-                    transcript_text = " ".join(chunk.text for chunk in fetched)
-                except Exception:
+            lang_code = "en"
+            # Try finding manual/generated English transcript
+            try:
+                english_transcript = transcript_list_obj.find_transcript(['en', 'en-US', 'en-GB'])
+                fetched = english_transcript.fetch()
+                transcript_text = " ".join(chunk.text for chunk in fetched)
+                print(f"Loaded native English transcript for video '{clean_id}'.")
+            except Exception:
+                # If native English is not available, pick first transcript
+                first_transcript = next(iter(transcript_list_obj))
+                lang_code = first_transcript.language_code
+                
+                if first_transcript.is_translatable:
+                    print(f"Auto-translating transcript ({lang_code}) to English via YouTube API...")
+                    try:
+                        translated = first_transcript.translate('en')
+                        fetched = translated.fetch()
+                        transcript_text = " ".join(chunk.text for chunk in fetched)
+                    except Exception:
+                        fetched = first_transcript.fetch()
+                        transcript_text = translate_to_english_fallback(fetched, lang_code)
+                else:
                     fetched = first_transcript.fetch()
                     transcript_text = translate_to_english_fallback(fetched, lang_code)
-            else:
-                fetched = first_transcript.fetch()
-                transcript_text = translate_to_english_fallback(fetched, lang_code)
-                
-    except (TranscriptsDisabled, NoTranscriptFound) as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transcript is disabled or unavailable for YouTube video ID '{clean_id}'."
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Could not fetch transcript for video ID '{clean_id}': {str(e)}"
-        )
+                    
+        except (TranscriptsDisabled, NoTranscriptFound) as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Transcript is disabled or unavailable for YouTube video ID '{clean_id}'."
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Could not fetch transcript for video ID '{clean_id}': {str(e)}"
+            )
         
     if not transcript_text or len(transcript_text.strip()) == 0:
         raise HTTPException(
@@ -246,10 +263,12 @@ def get_or_create_vector_store(video_id: str) -> FAISS:
 # Request Schemas
 class ProcessVideoRequest(BaseModel):
     video_id: str = Field(..., description="YouTube video ID or video URL")
+    transcript_text: Optional[str] = Field(None, description="Optional raw transcript text extracted by client browser")
 
 class ChatRequest(BaseModel):
     video_id: str = Field(..., description="YouTube video ID or video URL")
     question: str = Field(..., description="User question about the video content")
+    transcript_text: Optional[str] = Field(None, description="Optional raw transcript text extracted by client browser")
 
 
 @app.get("/")
@@ -280,7 +299,7 @@ def health_check():
 @app.post("/process")
 def process_video(req: ProcessVideoRequest):
     clean_id = extract_video_id(req.video_id)
-    vector_store = get_or_create_vector_store(clean_id)
+    vector_store = get_or_create_vector_store(clean_id, custom_transcript_text=req.transcript_text)
     cached_info = vector_store_cache.get(clean_id, {})
     return {
         "status": "success",
@@ -297,7 +316,7 @@ def chat_with_video(req: ChatRequest):
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
         
     clean_id = extract_video_id(req.video_id)
-    vector_store = get_or_create_vector_store(clean_id)
+    vector_store = get_or_create_vector_store(clean_id, custom_transcript_text=req.transcript_text)
     
     # 1. Retrieve session chat history checkpoint
     session_history = get_session_history(clean_id)
