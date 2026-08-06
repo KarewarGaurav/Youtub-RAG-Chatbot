@@ -388,7 +388,25 @@ def clear_chat_history(req: ProcessVideoRequest):
     }
 
 
+# Gradio Web Interface Integration for Hugging Face Spaces
+try:
+    import gradio as gr
+    def gradio_interface(query):
+        return f"YouTube RAG Assistant Backend is Online! API Status: OK. Echo: {query}"
+
+    demo = gr.Interface(
+        fn=gradio_interface,
+        inputs=gr.Textbox(label="Backend Test Input", placeholder="Type anything to test..."),
+        outputs="text",
+        title="🤖 YouTube Video RAG AI Assistant API",
+        description="FastAPI Backend for Chrome Extension. Endpoints: /chat, /process, /health, /docs"
+    )
+    app = gr.mount_gradio_app(app, demo, path="/")
+except Exception as e:
+    print(f"Gradio mounting skipped: {e}")
+
 if __name__ == "__main__":
     import uvicorn
-    print("Starting FastAPI YouTube RAG Backend Server on port 8000...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 7860))
+    print(f"Starting YouTube RAG Backend Server on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port)

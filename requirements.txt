@@ -4,8 +4,9 @@ youtube-transcript-api>=0.6.0
 langchain-groq
 langchain-text-splitters
 langchain-community
-langchain-huggingface
+fastembed
 faiss-cpu
 python-dotenv
 pydantic
 deep-translator
+gradio
