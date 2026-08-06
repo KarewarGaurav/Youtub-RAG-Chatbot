@@ -1,3 +1,14 @@
+---
+title: YouTube Video RAG AI Assistant
+emoji: 🤖
+colorFrom: red
+colorTo: gray
+sdk: gradio
+sdk_version: 4.19.0
+app_file: app.py
+pinned: false
+---
+
 # YouTube Video RAG AI Assistant & Chrome Extension
 
 A full-stack Chrome Extension and FastAPI RAG (Retrieval-Augmented Generation) Agent backend that automatically detects the YouTube video you are watching, fetches its transcript, indexes it into a **FAISS** vector store using **HuggingFace Embeddings**, and allows real-time interactive QA powered by **LangChain** and **Groq Llama 3.1 8B**.
