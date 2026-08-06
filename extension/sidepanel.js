@@ -1,4 +1,4 @@
-const BACKEND_URL = "http://localhost:8000";
+const BACKEND_URL = "https://karewargaurav-youtube-rag-chatbot.hf.space";
 
 let currentVideoId = null;
 let isProcessing = false;
